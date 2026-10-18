@@ -19,8 +19,8 @@ jobs:
   static:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.8"
           cache: 'pip'
@@ -54,9 +54,9 @@ jobs:
         python-version: ["3.8", "pypy-3.9", "3.13"]
     name: CPython ${{ matrix.python-version }}-${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -72,7 +72,7 @@ jobs:
             pip install hatch
           fi
       - name: Start MongoDB
-        uses: supercharge/mongodb-github-action@1.10.0
+        uses: supercharge/mongodb-github-action@1.12.1
         with:
           mongodb-version: 6.0
       - name: Run tests
@@ -83,9 +83,9 @@ jobs:
     runs-on: ubuntu-latest
     name: DocTest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.8"
           cache: 'pip'
@@ -94,7 +94,7 @@ jobs:
         run: |
           pip install -U hatch pip
       - name: Start MongoDB
-        uses: supercharge/mongodb-github-action@1.10.0
+        uses: supercharge/mongodb-github-action@1.12.1
         with:
           mongodb-version: '8.0.0-rc4'
       - name: Run tests
@@ -105,8 +105,8 @@ jobs:
     name: Docs Checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           cache: 'pip'
           cache-dependency-path: 'pyproject.toml'
@@ -123,8 +123,8 @@ jobs:
     name: Link Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           cache: 'pip'
           cache-dependency-path: 'pyproject.toml'
@@ -144,8 +144,8 @@ jobs:
       matrix:
         python: ["3.8", "3.11"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "${{matrix.python}}"
           cache: 'pip'
@@ -161,8 +161,8 @@ jobs:
     runs-on: ubuntu-latest
     name: "Make an sdist"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           cache: 'pip'
           cache-dependency-path: 'pyproject.toml'
@@ -173,7 +173,7 @@ jobs:
         run: |
           pip install build
           python -m build --sdist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: "sdist"
           path: dist/*.tar.gz
@@ -185,7 +185,7 @@ jobs:
       timeout-minutes: 20
       steps:
         - name: Download sdist
-          uses: actions/download-artifact@v4
+          uses: actions/download-artifact@v8
         - name: Unpack SDist
           shell: bash
           run: |
@@ -194,14 +194,14 @@ jobs:
             mkdir test
             tar --strip-components=1 -zxf *.tar.gz -C ./test
             ls test
-        - uses: actions/setup-python@v5
+        - uses: actions/setup-python@v7
           with:
             cache: 'pip'
             cache-dependency-path: 'sdist/test/pyproject.toml'
             # Test sdist on lowest supported Python
             python-version: '3.8'
         - name: Start MongoDB
-          uses: supercharge/mongodb-github-action@1.10.0
+          uses: supercharge/mongodb-github-action@1.12.1
         - name: Run connect test from sdist
           shell: bash
           run: |
