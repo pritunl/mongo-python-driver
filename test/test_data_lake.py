@@ -1,0 +1,109 @@
+# Copyright 2020-present MongoDB, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Test Atlas Data Lake."""
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path[0:0] = [""]
+
+from test import IntegrationTest, client_context, unittest
+from test.unified_format import generate_test_classes
+from test.utils import (
+    OvertCommandListener,
+)
+
+pytestmark = pytest.mark.data_lake
+
+
+# Location of JSON test specifications.
+_TEST_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data_lake")
+
+
+class TestDataLakeMustConnect(unittest.TestCase):
+    def test_connected_to_data_lake(self):
+        data_lake = os.environ.get("TEST_DATA_LAKE")
+        if not data_lake:
+            self.skipTest("TEST_DATA_LAKE is not set")
+
+        self.assertTrue(
+            client_context.is_data_lake and client_context.connected,
+            "client context must be connected to data lake when DATA_LAKE is set. Failed attempts:\n{}".format(
+                client_context.connection_attempt_info()
+            ),
+        )
+
+
+class TestDataLakeProse(IntegrationTest):
+    # Default test database and collection names.
+    TEST_DB = "test"
+    TEST_COLLECTION = "driverdata"
+
+    @classmethod
+    @client_context.require_data_lake
+    def setUpClass(cls):
+        super().setUpClass()
+
+    # Test killCursors
+    def test_1(self):
+        listener = OvertCommandListener()
+        client = self.rs_or_single_client(event_listeners=[listener])
+        cursor = client[self.TEST_DB][self.TEST_COLLECTION].find({}, batch_size=2)
+        next(cursor)
+
+        # find command assertions
+        find_cmd = listener.succeeded_events[-1]
+        self.assertEqual(find_cmd.command_name, "find")
+        cursor_id = find_cmd.reply["cursor"]["id"]
+        cursor_ns = find_cmd.reply["cursor"]["ns"]
+
+        # killCursors command assertions
+        cursor.close()
+        started = listener.started_events[-1]
+        self.assertEqual(started.command_name, "killCursors")
+        succeeded = listener.succeeded_events[-1]
+        self.assertEqual(succeeded.command_name, "killCursors")
+
+        self.assertIn(cursor_id, started.command["cursors"])
+        target_ns = ".".join([started.command["$db"], started.command["killCursors"]])
+        self.assertEqual(cursor_ns, target_ns)
+
+        self.assertIn(cursor_id, succeeded.reply["cursorsKilled"])
+
+    # Test no auth
+    def test_2(self):
+        client = self.rs_client_noauth()
+        client.admin.command("ping")
+
+    # Test with auth
+    def test_3(self):
+        for mechanism in ["SCRAM-SHA-1", "SCRAM-SHA-256"]:
+            client = self.rs_or_single_client(authMechanism=mechanism)
+            client[self.TEST_DB][self.TEST_COLLECTION].find_one()
+
+
+# Location of JSON test specifications.
+TEST_PATH = Path(__file__).parent / "data_lake/unified"
+
+# Generate unified tests.
+globals().update(generate_test_classes(TEST_PATH, module=__name__))
+
+
+if __name__ == "__main__":
+    unittest.main()
