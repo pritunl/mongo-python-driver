@@ -79,6 +79,17 @@ class TestURI(unittest.TestCase):
         self.assertEqual([("::1", 27017)], split_hosts("[::1]:27017"))
         self.assertEqual([("::1", 27017)], split_hosts("[::1]"))
 
+    def test_split_hosts_percent_encoded_host(self):
+        # PYTHON-5986: percent-encoding in a hostname is rejected rather than
+        # decoded. Only socket paths and IPv6 zone indexes are decoded.
+        self.assertRaises(InvalidURI, split_hosts, "example.com%2Cexample.org%3A27017")
+        self.assertRaises(InvalidURI, split_hosts, "example.com%2F27017")
+
+    def test_split_hosts_ipv6_zone_index(self):
+        # An IPv6 zone index is escaped as "%25" (RFC 6874) and must still
+        # decode, unlike percent-encoding in a plain hostname.
+        self.assertEqual([("fe80::1%eth0", 27017)], split_hosts("[fe80::1%25eth0]:27017"))
+
     def test_split_options(self):
         self.assertRaises(ConfigurationError, split_options, "foo")
         self.assertRaises(ConfigurationError, split_options, "foo=bar;foo")
@@ -417,6 +428,10 @@ class TestURI(unittest.TestCase):
             parse_uri,
             "mongodb://user%40domain.com:password@localhost/foo?uuidrepresentation=notAnOption",
         )
+
+    def test_parse_uri_percent_encoded_host(self):
+        # PYTHON-5986: a percent-encoded hostname is rejected by parse_uri too.
+        self.assertRaises(InvalidURI, parse_uri, "mongodb://example.com%2Cexample.org%3A27017/")
 
     def test_parse_ssl_paths(self):
         # Turn off "validate" since these paths don't exist on filesystem.

@@ -1484,6 +1484,14 @@ class TestCustomEndpoint(EncryptionIntegrationTest):
         with self.assertRaisesRegex(EncryptionError, self.kmip_host_error):
             self.client_encryption.create_data_key("kmip", key)
 
+    def test_kmip_endpoint_unix_socket_rejected(self):
+        # PYTHON-5990: a masterKey.endpoint ending in ".sock" must not be
+        # treated as a Unix domain socket path. KMS endpoints must be a TCP
+        # host[:port].
+        master_key = {"keyId": "1", "endpoint": "example.sock"}
+        with self.assertRaisesRegex(EncryptionError, "Invalid KMS endpoint"):
+            self.client_encryption.create_data_key("kmip", master_key=master_key)
+
 
 class AzureGCPEncryptionTestMixin(EncryptionIntegrationTest):
     DEK = None

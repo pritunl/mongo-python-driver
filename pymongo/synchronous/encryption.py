@@ -173,6 +173,8 @@ class _EncryptionIO(MongoCryptCallback):  # type: ignore[misc]
             ssl_context=ctx,
         )
         host, port = parse_host(endpoint, _HTTPS_PORT)
+        if host.endswith(".sock"):
+            raise ConfigurationError(f"Invalid KMS endpoint {endpoint!r}")
         try:
             conn = _configured_socket((host, port), opts)
             try:

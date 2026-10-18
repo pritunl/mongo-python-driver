@@ -282,8 +282,8 @@ class GridFS:
            ``delete`` no longer ensures indexes.
         """
         _disallow_transactions(session)
-        self._files.delete_one({"_id": file_id}, session=session)
-        self._chunks.delete_many({"files_id": file_id}, session=session)
+        self._files.delete_one({"_id": {"$eq": file_id}}, session=session)
+        self._chunks.delete_many({"files_id": {"$eq": file_id}}, session=session)
 
     def list(self, session: Optional[ClientSession] = None) -> list[str]:
         """List the names of all files stored in this instance of
@@ -337,7 +337,7 @@ class GridFS:
            Added ``session`` parameter.
         """
         if filter is not None and not isinstance(filter, abc.Mapping):
-            filter = {"_id": filter}
+            filter = {"_id": {"$eq": filter}}
 
         _disallow_transactions(session)
         for f in self.find(filter, *args, session=session, **kwargs):
@@ -451,6 +451,8 @@ class GridFS:
         if kwargs:
             f = self._files.find_one(kwargs, ["_id"], session=session)
         else:
+            if document_or_id is not None and not isinstance(document_or_id, abc.Mapping):
+                document_or_id = {"_id": {"$eq": document_or_id}}
             f = self._files.find_one(document_or_id, ["_id"], session=session)
 
         return f is not None
@@ -825,8 +827,8 @@ class GridFSBucket:
            Added ``session`` parameter.
         """
         _disallow_transactions(session)
-        res = self._files.delete_one({"_id": file_id}, session=session)
-        self._chunks.delete_many({"files_id": file_id}, session=session)
+        res = self._files.delete_one({"_id": {"$eq": file_id}}, session=session)
+        self._chunks.delete_many({"files_id": {"$eq": file_id}}, session=session)
         if not res.deleted_count:
             raise NoFile("no file could be deleted because none matched %s" % file_id)
 
@@ -1007,7 +1009,7 @@ class GridFSBucket:
         """
         _disallow_transactions(session)
         result = self._files.update_one(
-            {"_id": file_id}, {"$set": {"filename": new_filename}}, session=session
+            {"_id": {"$eq": file_id}}, {"$set": {"filename": new_filename}}, session=session
         )
         if not result.matched_count:
             raise NoFile(
@@ -1127,8 +1129,10 @@ class GridIn:
 
     def abort(self) -> None:
         """Remove all chunks/files that may have been uploaded and close."""
-        self._coll.chunks.delete_many({"files_id": self._file["_id"]}, session=self._session)
-        self._coll.files.delete_one({"_id": self._file["_id"]}, session=self._session)
+        self._coll.chunks.delete_many(
+            {"files_id": {"$eq": self._file["_id"]}}, session=self._session
+        )
+        self._coll.files.delete_one({"_id": {"$eq": self._file["_id"]}}, session=self._session)
         object.__setattr__(self, "_closed", True)
 
     @property
@@ -1177,7 +1181,9 @@ class GridIn:
             self._file[name] = value
             if self._closed:
                 if _IS_SYNC:
-                    self._coll.files.update_one({"_id": self._file["_id"]}, {"$set": {name: value}})
+                    self._coll.files.update_one(
+                        {"_id": {"$eq": self._file["_id"]}}, {"$set": {name: value}}
+                    )
                 else:
                     raise AttributeError(
                         "GridIn does not support __setattr__ after being closed(). Set the attribute before closing the file or use GridIn.set() instead"
@@ -1186,7 +1192,9 @@ class GridIn:
     def set(self, name: str, value: Any) -> None:
         self._file[name] = value
         if self._closed:
-            self._coll.files.update_one({"_id": self._file["_id"]}, {"$set": {name: value}})
+            self._coll.files.update_one(
+                {"_id": {"$eq": self._file["_id"]}}, {"$set": {name: value}}
+            )
 
     def _flush_data(self, data: Any, force: bool = False) -> None:
         """Flush `data` to a chunk."""
@@ -1513,7 +1521,9 @@ class GridOut(GRIDOUT_BASE_CLASS):  # type: ignore
     def open(self) -> None:
         if not self._file:
             _disallow_transactions(self._session)
-            self._file = self._files.find_one({"_id": self._file_id}, session=self._session)
+            self._file = self._files.find_one(
+                {"_id": {"$eq": self._file_id}}, session=self._session
+            )
             if not self._file:
                 raise NoFile(
                     f"no file in gridfs collection {self._files!r} with _id {self._file_id!r}"
@@ -1784,7 +1794,7 @@ class GridOutChunkIterator:
         return self
 
     def _create_cursor(self) -> None:
-        filter = {"files_id": self._id}
+        filter = {"files_id": {"$eq": self._id}}
         if self._next_chunk > 0:
             filter["n"] = {"$gte": self._next_chunk}
         _disallow_transactions(self._session)

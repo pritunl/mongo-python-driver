@@ -396,6 +396,51 @@ class TestBSON(unittest.TestCase):
         # Assert that the InvalidBSON error message is not empty.
         self.assertTrue(str(ctx.exception))
 
+    def test_malformed_regex(self):
+        # PYTHON-6110: decoding a malformed Regex element must raise
+        # InvalidBSON on every accepted buffer type.
+        malformed = []
+        for pattern in ("", "x", "xx"):
+            doc = bytearray(encode({"a": Regex(pattern, "")}))
+            # Drop the trailing flags NUL and document EOO bytes, leaving
+            # the flags string unterminated after the pattern's NUL.
+            del doc[-2:]
+            # Keep the length prefix consistent with the shorter document.
+            doc[:4] = struct.pack("<i", len(doc))
+            malformed.append(bytes(doc))
+        for data in malformed:
+            with self.assertRaises(InvalidBSON):
+                decode(data)
+            with self.assertRaises(InvalidBSON):
+                decode(bytearray(data))
+            with self.assertRaises(InvalidBSON):
+                decode(memoryview(data))
+            with self.assertRaises(InvalidBSON):
+                decode(array.array("B", data))
+            with self.assertRaises(InvalidBSON):
+                list(decode_iter(data))
+            with self.assertRaises(InvalidBSON):
+                decode_all(data)
+            with mmap.mmap(-1, len(data)) as mm:
+                mm.write(data)
+                mm.seek(0)
+                with self.assertRaises(InvalidBSON):
+                    decode(mm)
+                with self.assertRaises(InvalidBSON):
+                    decode_all(mm)
+
+    def test_regex_empty_flags(self):
+        # PYTHON-6110: a valid regex with an empty flags string must
+        # continue to decode.
+        valid = encode({"a": Regex("b", "")})
+        expected = {"a": Regex("b", 0)}
+        self.assertEqual(decode(valid), expected)
+        with mmap.mmap(-1, len(valid)) as mm:
+            mm.write(valid)
+            mm.seek(0)
+            self.assertEqual(decode(mm), expected)
+            self.assertEqual(decode_all(mm), [expected])
+
     def test_data_timestamp(self):
         self.assertEqual(
             {"test": Timestamp(4, 20)},
@@ -690,6 +735,14 @@ class TestBSON(unittest.TestCase):
 
         self.assertTrue(encode({"x": -9223372036854775808}))
         self.assertRaises(OverflowError, encode, {"x": -9223372036854775809})
+
+    @unittest.skipUnless(bson.has_c(), "This test requires the C extension")
+    def test_encode_size_limit(self):
+        # PYTHON-5996: encoding must raise when a document's encoded size
+        # exceeds the BSON size limit.
+        big_value = "a" * (1 << 30)
+        with self.assertRaises(ValueError):
+            encode({"a": big_value, "b": big_value, "c": big_value})
 
     def test_small_long_encode_decode(self):
         encoded1 = encode({"x": 256})
